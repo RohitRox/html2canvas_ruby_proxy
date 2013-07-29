@@ -30,34 +30,44 @@ class ImageProxy  < EM::Connection
 
     resp = EM::DelegatedHttpResponse.new( self )
 
-    resp.headers={'Access-Control-Max-Age' => 5*60*1000, 
-                    'Access-Control-Allow-Origin' => '*',
-                    'Access-Control-Request-Method' => '*',
-                    'Access-Control-Allow-Methods' =>'OPTIONS, GET',
-                    'Access-Control-Allow-Headers' =>'*'}
-    resp.status = 200
-
-    if (@http_request_method == 'options')
-
+    if (@http_query_string.nil?)
+      resp.content_type 'text/html'
+      resp.content = "HTML2CANVAS PROXY"
       resp.send_response
-      
-    else
 
-      puts "Request: #{@http_query_string}"
+    else
 
       callback = CGI::parse(@http_query_string)['callback'][0]
 
       img_url = CGI::parse(@http_query_string)['url'][0]
 
-      ext = img_url.split('.')[-1]
+      resp.headers={'Access-Control-Max-Age' => 5*60*1000, 
+                      'Access-Control-Allow-Origin' => '*',
+                      'Access-Control-Request-Method' => '*',
+                      'Access-Control-Allow-Methods' =>'OPTIONS, GET',
+                      'Access-Control-Allow-Headers' =>'*'}
+      resp.status = 200
 
-      http = EventMachine::HttpRequest.new(img_url).get
 
-      http.callback do |response|
-        content = 'data:image/'+ext+';base64,'+Base64.encode64(http.response.chomp)
-        resp.content_type 'application/json'
-        resp.content = "#{callback}(#{content.to_json})"
+      if (@http_request_method == 'options')
+
         resp.send_response
+
+      else
+
+        puts "Request: #{@http_query_string}"
+
+        ext = img_url.split('.')[-1]
+
+        http = EventMachine::HttpRequest.new(img_url).get
+
+        http.callback do |response|
+          content = 'data:image/'+ext+';base64,'+Base64.encode64(http.response.chomp)
+          resp.content_type 'application/json'
+          resp.content = "#{callback}(#{content.to_json})"
+          resp.send_response
+        end
+
       end
 
     end
@@ -67,6 +77,7 @@ class ImageProxy  < EM::Connection
 end
 
 EM::run {
-  EM::start_server("0.0.0.0", 8082, ImageProxy)
+  host, port = '0.0.0.0', ENV['PORT'].nil? ? '8082':ENV['PORT']
+  EM::start_server(host, port, ImageProxy)
   puts "Listening on port 8082 ... "
 }
